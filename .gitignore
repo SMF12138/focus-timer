@@ -36,3 +36,4 @@ electron/native/Release/
 
 # Generated icons (source SVG is kept)
 build/*.png
+build/*.ico

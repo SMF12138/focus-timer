@@ -20,13 +20,16 @@
     requestedExecutionLevel: 'requireAdministrator',
   },
   nsis: {
-    oneClick: true,
+    oneClick: false,
     perMachine: false,
-    allowToChangeInstallationDirectory: false,
+    allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: '专注计时器',
     deleteAppDataOnUninstall: true,
+    installerIcon: 'build/icon.ico',
+    uninstallerIcon: 'build/icon.ico',
+    installerHeaderIcon: 'build/icon.ico',
   },
   extraResources: [
     {
