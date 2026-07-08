@@ -15,12 +15,18 @@
     'dist-electron/native/**/*.node',
   ],
   win: {
-    target: 'portable',
+    target: 'nsis',
     icon: 'build/icon.png',
+    requestedExecutionLevel: 'requireAdministrator',
   },
-  portable: {
-    artifactName: 'FocusTimer.exe',
-    requestExecutionLevel: 'admin',
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    allowToChangeInstallationDirectory: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: '专注计时器',
+    deleteAppDataOnUninstall: true,
   },
   extraResources: [
     {
