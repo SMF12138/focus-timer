@@ -1,0 +1,40 @@
+{
+  "name": "focus-timer",
+  "private": true,
+  "version": "0.0.0",
+  "description": "一款支持系统级快捷键封锁的 Windows 全屏专注计时器。",
+  "author": "专注计时器团队",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
+    "electron": "cross-env NODE_ENV=development electron .",
+    "build": "vue-tsc -b && vite build && npm run build:electron",
+    "build:electron": "tsc -p electron/tsconfig.json && node scripts/build-electron.cjs",
+    "preview": "vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "dist": "npm run build && electron-builder",
+    "icon": "node scripts/generate-icon.cjs"
+  },
+  "dependencies": {
+    "vue": "^3.5.39",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/tsconfig": "^0.9.1",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "node-addon-api": "^8.9.0",
+    "node-gyp": "^12.4.0",
+    "sass": "^1.101.0",
+    "sharp": "^0.35.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vue-tsc": "^3.3.5",
+    "wait-on": "^9.0.10"
+  }
+}

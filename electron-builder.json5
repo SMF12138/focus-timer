@@ -1,0 +1,32 @@
+{
+  appId: 'com.focustimer.app',
+  productName: '专注计时器',
+  copyright: '版权所有 © 2026',
+  directories: {
+    output: 'release',
+    buildResources: 'build',
+  },
+  files: [
+    'dist/**/*',
+    'dist-electron/**/*',
+    '!node_modules/**/*',
+  ],
+  asarUnpack: [
+    'dist-electron/native/**/*.node',
+  ],
+  win: {
+    target: 'portable',
+    icon: 'build/icon.png',
+  },
+  portable: {
+    artifactName: 'FocusTimer.exe',
+    requestExecutionLevel: 'admin',
+  },
+  extraResources: [
+    {
+      from: 'dist-electron/native',
+      to: 'dist-electron/native',
+      filter: ['**/*.node'],
+    },
+  ],
+}
