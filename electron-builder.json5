@@ -1,5 +1,5 @@
 {
-  appId: 'com.focustimer.app',
+  appId: 'com.focustimer.app.setup',
   productName: '专注计时器',
   copyright: '版权所有 © 2026',
   directories: {
