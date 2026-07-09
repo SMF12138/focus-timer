@@ -30,6 +30,7 @@
     installerIcon: 'build/icon.ico',
     uninstallerIcon: 'build/icon.ico',
     installerHeaderIcon: 'build/icon.ico',
+    include: 'build/installer.nsh',
   },
   extraResources: [
     {
