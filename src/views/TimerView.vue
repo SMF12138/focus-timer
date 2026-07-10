@@ -23,6 +23,13 @@
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+            <filter id="glowStrong" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="5" result="coloredBlur" />
+              <feMerge>
+                <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
             <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="1.5" result="blur" />
               <feMerge>
@@ -41,7 +48,9 @@
             :stroke-dashoffset="offset"
           />
         </svg>
-        <div class="time" aria-live="polite" aria-atomic="true">{{ display }}</div>
+        <div class="time" aria-live="polite" aria-atomic="true">
+        <FlipClock :time="display" size="min(13vw, 10rem)" />
+      </div>
       </div>
     </div>
 
@@ -69,6 +78,7 @@ import { useParticles } from '../composables/useParticles'
 import { useFireworks } from '../composables/useFireworks'
 import FishPond from '../components/FishPond.vue'
 import AuroraBg from '../components/AuroraBg.vue'
+import FlipClock from '../components/FlipClock.vue'
 
 const { remaining, display, progress, setTimer, reset } = useTimer()
 const particleCanvas = ref<HTMLCanvasElement | null>(null)
@@ -206,15 +216,58 @@ function onConfirm() {
   filter: url(#glow);
 }
 
+.timer.finished .progress {
+  animation: ringPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    filter: url(#glow);
+  }
+  50% {
+    filter: url(#glowStrong);
+  }
+}
+
+.timer.finished .time {
+  animation: timeBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes timeBounce {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.timer.finished .ring-wrapper {
+  animation: ringFinish 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ringFinish {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .time {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(4rem, 13vw, 10rem);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
   letter-spacing: -4px;
   color: #f0f9ff;
   text-shadow:
@@ -265,7 +318,7 @@ function onConfirm() {
   background: rgba(11, 16, 32, 0.85);
   backdrop-filter: blur(16px);
   z-index: 100;
-  animation: popIn 0.5s ease-out;
+  animation: modalReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .finish-card {
@@ -280,7 +333,30 @@ function onConfirm() {
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.4),
     0 0 60px rgba(52, 211, 153, 0.15);
-  animation: cardGlow 2s ease-in-out infinite;
+  animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.08s backwards;
+}
+
+@keyframes modalReveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cardPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(30px);
+  }
+  60% {
+    transform: scale(1.04) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .finish-icon {
@@ -316,19 +392,6 @@ function onConfirm() {
 .confirm-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 32px rgba(52, 211, 153, 0.4);
-}
-
-@keyframes cardGlow {
-  0%, 100% {
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.4),
-      0 0 60px rgba(52, 211, 153, 0.15);
-  }
-  50% {
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.4),
-      0 0 80px rgba(52, 211, 153, 0.25);
-  }
 }
 
 @keyframes bounce {
