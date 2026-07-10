@@ -16,10 +16,17 @@
               <stop offset="50%" stop-color="#38bdf8" />
               <stop offset="100%" stop-color="#818cf8" />
             </linearGradient>
-            <filter id="glow">
+            <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
               <feMerge>
                 <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
@@ -173,19 +180,21 @@ function onConfirm() {
   position: relative;
   width: min(75vw, 560px);
   height: min(75vw, 560px);
-  filter: drop-shadow(0 0 24px rgba(56, 189, 248, 0.25));
+  border-radius: 50%;
 }
 
 .ring {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+  overflow: visible;
 }
 
 .track {
   fill: none;
   stroke: rgba(255, 255, 255, 0.08);
   stroke-width: 4;
+  filter: url(#softGlow);
 }
 
 .progress {

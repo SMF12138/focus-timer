@@ -39,7 +39,7 @@ withDefaults(
   height: 60vw;
   top: 10%;
   left: 20%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 60%);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.32) 0%, rgba(56, 189, 248, 0.08) 45%, transparent 75%);
   animation-delay: 0s;
 }
 
@@ -48,7 +48,7 @@ withDefaults(
   height: 50vw;
   top: 40%;
   right: 10%;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.3), transparent 60%);
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.28) 0%, rgba(168, 85, 247, 0.06) 45%, transparent 75%);
   animation-delay: -7s;
 }
 
@@ -57,7 +57,7 @@ withDefaults(
   height: 45vw;
   bottom: 5%;
   left: 30%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.25), transparent 60%);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0.05) 45%, transparent 75%);
   animation-delay: -14s;
 }
 
@@ -66,7 +66,7 @@ withDefaults(
   height: 50vw;
   bottom: 20%;
   right: 15%;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.25), transparent 60%);
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.22) 0%, rgba(52, 211, 153, 0.05) 45%, transparent 75%);
   animation-delay: -5s;
 }
 
