@@ -4,8 +4,8 @@ export interface ElectronAPI {
   startTimer: (seconds: number) => void;
   stopTimer: () => void;
   quitApp: () => void;
-  onTimerUpdate: (cb: (data: { remaining: number; total: number }) => void) => void;
-  onTimerFinished: (cb: () => void) => void;
+  onTimerUpdate: (cb: (data: { remaining: number; total: number }) => void) => () => void;
+  onTimerFinished: (cb: () => void) => () => void;
   finishAck: () => void;
 }
 
@@ -15,9 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   quitApp: () => ipcRenderer.send('quit-app'),
   finishAck: () => ipcRenderer.send('finish-ack'),
   onTimerUpdate: (cb: (data: { remaining: number; total: number }) => void) => {
-    ipcRenderer.on('timer-update', (_, data) => cb(data));
+    const handler = (_: Electron.IpcRendererEvent, data: { remaining: number; total: number }) => cb(data);
+    ipcRenderer.on('timer-update', handler);
+    return () => ipcRenderer.removeListener('timer-update', handler);
   },
   onTimerFinished: (cb: () => void) => {
-    ipcRenderer.on('timer-finished', () => cb());
+    const handler = () => cb();
+    ipcRenderer.on('timer-finished', handler);
+    return () => ipcRenderer.removeListener('timer-finished', handler);
   },
 } as ElectronAPI);

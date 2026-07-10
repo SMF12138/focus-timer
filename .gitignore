@@ -33,6 +33,7 @@ FocusTimer.exe
 # Native build artifacts
 electron/native/build/
 electron/native/Release/
+electron/native/*.node
 
 # Generated icons (source SVG is kept)
 build/*.png

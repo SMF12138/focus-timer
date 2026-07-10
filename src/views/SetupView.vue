@@ -1,10 +1,6 @@
 <template>
   <div class="setup">
-    <div class="aurora-bg">
-      <div class="aurora aurora-1"></div>
-      <div class="aurora aurora-2"></div>
-      <div class="aurora aurora-3"></div>
-    </div>
+    <AuroraBg />
 
     <FishPond mode="free" />
 
@@ -26,13 +22,27 @@
 
       <div class="custom-row">
         <div class="field">
-          <label>分钟</label>
-          <input v-model.number="minutes" type="number" min="0" max="999" />
+          <label for="minutes-input">分钟</label>
+          <input
+            id="minutes-input"
+            v-model.number="minutes"
+            type="number"
+            min="0"
+            max="999"
+            @input="sanitizeMinutes"
+          />
         </div>
         <span class="colon">:</span>
         <div class="field">
-          <label>秒</label>
-          <input v-model.number="seconds" type="number" min="0" max="59" />
+          <label for="seconds-input">秒</label>
+          <input
+            id="seconds-input"
+            v-model.number="seconds"
+            type="number"
+            min="0"
+            max="59"
+            @input="sanitizeSeconds"
+          />
         </div>
       </div>
 
@@ -45,6 +55,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import FishPond from '../components/FishPond.vue'
+import AuroraBg from '../components/AuroraBg.vue'
 
 const presets = [5, 10, 15, 25, 45]
 const minutes = ref(25)
@@ -55,8 +66,22 @@ function selectPreset(m: number) {
   seconds.value = 0
 }
 
+function sanitizeMinutes() {
+  minutes.value = clampInt(minutes.value, 0, 999)
+}
+
+function sanitizeSeconds() {
+  seconds.value = clampInt(seconds.value, 0, 59)
+}
+
+function clampInt(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.floor(value || 0)))
+}
+
 function start() {
-  const totalSeconds = Math.max(0, minutes.value * 60 + seconds.value)
+  sanitizeMinutes()
+  sanitizeSeconds()
+  const totalSeconds = minutes.value * 60 + seconds.value
   if (totalSeconds <= 0) return
   window.electronAPI?.startTimer?.(totalSeconds)
 }
@@ -76,63 +101,6 @@ function quit() {
   padding: 32px;
   background: var(--bg);
   overflow: hidden;
-}
-
-.aurora-bg {
-  position: absolute;
-  inset: -50%;
-  z-index: 0;
-  pointer-events: none;
-  filter: blur(80px);
-  opacity: 0.7;
-}
-
-.aurora {
-  position: absolute;
-  border-radius: 50%;
-  animation: float 20s ease-in-out infinite;
-}
-
-.aurora-1 {
-  width: 60vw;
-  height: 60vw;
-  top: 10%;
-  left: 20%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 60%);
-  animation-delay: 0s;
-}
-
-.aurora-2 {
-  width: 50vw;
-  height: 50vw;
-  top: 40%;
-  right: 10%;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.3), transparent 60%);
-  animation-delay: -7s;
-}
-
-.aurora-3 {
-  width: 45vw;
-  height: 45vw;
-  bottom: 5%;
-  left: 30%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.25), transparent 60%);
-  animation-delay: -14s;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    transform: translate(5%, -5%) scale(1.05);
-  }
-  50% {
-    transform: translate(-3%, 3%) scale(0.95);
-  }
-  75% {
-    transform: translate(4%, 2%) scale(1.02);
-  }
 }
 
 .card {
@@ -276,3 +244,4 @@ function quit() {
   border-color: rgba(255, 255, 255, 0.2);
 }
 </style>
+

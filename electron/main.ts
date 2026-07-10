@@ -1,14 +1,52 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, screen, Menu } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import util from 'node:util';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 const logPath = path.join(app.getPath('userData'), 'app.log');
-function log(...args: any[]) {
-  const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
-  fs.appendFileSync(logPath, line);
+const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FOCUS_SECONDS = 24 * 60 * 60; // 24 hours
+
+function rotateLog() {
+  try {
+    const stat = fs.statSync(logPath);
+    if (stat.size > MAX_LOG_SIZE) {
+      const backup = logPath + '.old';
+      if (fs.existsSync(backup)) fs.unlinkSync(backup);
+      fs.renameSync(logPath, backup);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function formatLogArg(arg: unknown): string {
+  if (typeof arg === 'string') return arg;
+  try {
+    return util.inspect(arg, { depth: 3, breakLength: Infinity });
+  } catch {
+    return '[uninspectable]';
+  }
+}
+
+function log(...args: unknown[]): void {
+  const line = `[${new Date().toISOString()}] ${args.map(formatLogArg).join(' ')}\n`;
+  try {
+    rotateLog();
+    fs.appendFileSync(logPath, line);
+  } catch (err) {
+    console.error('Failed to write log:', err);
+  }
   if (isDev) console.log(...args);
+}
+
+function validateSeconds(value: unknown): number | null {
+  if (typeof value !== 'number') return null;
+  if (!Number.isInteger(value)) return null;
+  if (value <= 0 || value > MAX_FOCUS_SECONDS) return null;
+  return value;
 }
 
 const ESCAPE_SHORTCUT = 'Ctrl+Shift+E';
@@ -16,17 +54,32 @@ const ESCAPE_SHORTCUT = 'Ctrl+Shift+E';
 let setupWin: BrowserWindow | null = null;
 let timerWin: BrowserWindow | null = null;
 let timerInterval: NodeJS.Timeout | null = null;
-let remaining = 0;
-let total = 0;
+let timerDuration = 0;
+let timerStartAt = 0;
+let isExiting = false;
 
 let keyHook: { startHook: () => boolean; stopHook: () => void } | null = null;
 try {
-  keyHook = require('./native/keyHook.node');
+  const mod = require('./native/keyHook.node') as unknown;
+  if (
+    mod &&
+    typeof (mod as { startHook?: unknown }).startHook === 'function' &&
+    typeof (mod as { stopHook?: unknown }).stopHook === 'function'
+  ) {
+    keyHook = mod as { startHook: () => boolean; stopHook: () => void };
+  } else {
+    log('[keyHook] Native module exports unexpected interface');
+  }
 } catch (err) {
-  console.warn('Native key hook not loaded:', err);
+  log('[keyHook] Native key hook not loaded:', err);
 }
 
 function createSetupWindow() {
+  if (setupWin && !setupWin.isDestroyed()) {
+    setupWin.show();
+    setupWin.focus();
+    return;
+  }
   const { width, height } = screen.getPrimaryDisplay().size;
   log('[createSetupWindow] creating setup window', { width, height });
 
@@ -44,6 +97,7 @@ function createSetupWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -79,13 +133,17 @@ function createSetupWindow() {
   }
 
   setupWin.on('closed', () => {
-    log('[setup closed] cleaning up and exiting');
+    log('[setup closed]');
     setupWin = null;
-    cleanupAndExit();
   });
 }
 
 function createTimerWindow() {
+  if (timerWin && !timerWin.isDestroyed()) {
+    timerWin.show();
+    timerWin.focus();
+    return;
+  }
   const { width, height } = screen.getPrimaryDisplay().size;
 
   timerWin = new BrowserWindow({
@@ -106,6 +164,7 @@ function createTimerWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -143,10 +202,15 @@ function createTimerWindow() {
 }
 
 function startTimer(seconds: number) {
-  if (seconds <= 0) return;
+  const validSeconds = validateSeconds(seconds);
+  if (validSeconds === null) {
+    log('[startTimer] invalid seconds:', seconds);
+    return;
+  }
+  stopTimer();
 
-  remaining = seconds;
-  total = seconds;
+  timerDuration = validSeconds;
+  timerStartAt = Date.now();
 
   if (!timerWin || timerWin.isDestroyed()) {
     createTimerWindow();
@@ -162,19 +226,36 @@ function startTimer(seconds: number) {
 
   keyHook?.startHook();
 
-  globalShortcut.register(ESCAPE_SHORTCUT, () => {
-    stopTimer();
-  });
+  try {
+    const registered = globalShortcut.register(ESCAPE_SHORTCUT, () => {
+      stopTimer();
+    });
+    if (!registered) {
+      log('[startTimer] failed to register global shortcut:', ESCAPE_SHORTCUT);
+    }
+  } catch (err) {
+    log('[startTimer] globalShortcut.register error:', err);
+  }
 
-  timerWin?.webContents.send('timer-update', { remaining, total });
+  sendTimerUpdate();
 
   timerInterval = setInterval(() => {
-    remaining--;
-    timerWin?.webContents.send('timer-update', { remaining, total });
+    const remaining = getRemaining();
+    sendTimerUpdate();
     if (remaining <= 0) {
       finishTimer();
     }
-  }, 1000);
+  }, 100);
+}
+
+function getRemaining() {
+  const elapsed = Math.floor((Date.now() - timerStartAt) / 1000);
+  return Math.max(0, timerDuration - elapsed);
+}
+
+function sendTimerUpdate() {
+  const remaining = getRemaining();
+  timerWin?.webContents.send('timer-update', { remaining, total: timerDuration });
 }
 
 function stopTimer() {
@@ -187,27 +268,44 @@ function stopTimer() {
   globalShortcut.unregister(ESCAPE_SHORTCUT);
   keyHook?.stopHook();
 
+  timerDuration = 0;
+  timerStartAt = 0;
+
   if (timerWin && !timerWin.isDestroyed()) {
-    timerWin.setKiosk(false);
-    timerWin.setFullScreen(false);
-    timerWin.hide();
+    try {
+      timerWin.setKiosk(false);
+      timerWin.setFullScreen(false);
+      timerWin.hide();
+    } catch (err) {
+      log('[stopTimer] timerWin error:', err);
+    }
   }
 
   if (setupWin && !setupWin.isDestroyed()) {
-    setupWin.show();
-    setupWin.focus();
-    setupWin.setFullScreen(true);
+    try {
+      setupWin.show();
+      setupWin.focus();
+      setupWin.setFullScreen(true);
+    } catch (err) {
+      log('[stopTimer] setupWin error:', err);
+    }
   }
 }
 
 function cleanupAndExit(code = 0) {
+  if (isExiting) return;
+  isExiting = true;
   log('[cleanupAndExit] exiting with code', code);
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
   }
-  globalShortcut.unregisterAll();
-  keyHook?.stopHook();
+  try {
+    globalShortcut.unregisterAll();
+    keyHook?.stopHook();
+  } catch (err) {
+    log('[cleanupAndExit] cleanup error:', err);
+  }
 
   if (timerWin && !timerWin.isDestroyed()) {
     try {
@@ -238,7 +336,7 @@ ipcMain.on('finish-ack', () => {
 });
 ipcMain.on('quit-app', () => {
   log('[quit-app] received');
-  cleanupAndExit(0);
+  app.quit();
 });
 
 function finishTimer() {
@@ -247,6 +345,8 @@ function finishTimer() {
     timerInterval = null;
   }
   timerWin?.webContents.send('timer-finished');
+  timerDuration = 0;
+  timerStartAt = 0;
 }
 
 app.whenReady().then(() => {
@@ -261,9 +361,16 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-  keyHook?.stopHook();
-  if (timerInterval) clearInterval(timerInterval);
+  try {
+    globalShortcut.unregisterAll();
+    keyHook?.stopHook();
+  } catch (err) {
+    log('[will-quit] cleanup error:', err);
+  }
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
 });
 
 app.on('activate', () => {

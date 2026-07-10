@@ -58,8 +58,9 @@ interface Fish {
 }
 
 onMounted(() => {
-  const canvasEl = canvas.value!
-  const ctx2d = canvasEl.getContext('2d')!
+  const canvasEl = canvas.value as HTMLCanvasElement
+  const ctx2d = canvasEl.getContext('2d') as CanvasRenderingContext2D
+  if (!canvasEl || !ctx2d) return
 
   let width = 0
   let height = 0
@@ -67,6 +68,7 @@ onMounted(() => {
   let mouseY = -1000
   let mouseDownTime = 0
   let isMouseDown = false
+  let spriteLoaded = false
   const foods: Food[] = []
   const bubbles: Array<{ x: number; y: number; r: number; speed: number; alpha: number }> =
     Array.from({ length: 12 }).map(() => ({
@@ -84,6 +86,7 @@ onMounted(() => {
   const spriteRows = 2
   let spriteW = 0
   let spriteH = 0
+  let spriteOnload: (() => void) | null = null
 
   const orbitMode = props.mode === 'orbit'
   const cx = () => (props.orbitCenterX || width / 2)
@@ -162,8 +165,7 @@ onMounted(() => {
 
   function drawFish(f: Fish) {
     const speed = Math.hypot(f.vx, f.vy)
-    const sx = (f.spriteIndex % spriteCols) * spriteW
-    const sy = Math.floor(f.spriteIndex / spriteCols) * spriteH
+    const drawSize = f.size * 1.6
 
     ctx2d.save()
     ctx2d.translate(f.x, f.y)
@@ -174,21 +176,28 @@ onMounted(() => {
     const scale = 1 + Math.min(speed * 0.02, 0.06)
     ctx2d.scale(scale, scale)
 
-    ctx2d.shadowBlur = 14
-    ctx2d.shadowColor = 'rgba(251, 191, 36, 0.35)'
-
-    const drawSize = f.size * 1.6
-    ctx2d.drawImage(
-      sprite,
-      sx,
-      sy,
-      spriteW,
-      spriteH,
-      -drawSize / 2,
-      -drawSize / 2,
-      drawSize,
-      drawSize
-    )
+    if (!spriteLoaded || spriteW === 0 || spriteH === 0) {
+      ctx2d.beginPath()
+      ctx2d.arc(0, 0, drawSize / 2, 0, Math.PI * 2)
+      ctx2d.fillStyle = '#fbbf24'
+      ctx2d.fill()
+    } else {
+      ctx2d.shadowBlur = 14
+      ctx2d.shadowColor = 'rgba(251, 191, 36, 0.35)'
+      const sx = (f.spriteIndex % spriteCols) * spriteW
+      const sy = Math.floor(f.spriteIndex / spriteCols) * spriteH
+      ctx2d.drawImage(
+        sprite,
+        sx,
+        sy,
+        spriteW,
+        spriteH,
+        -drawSize / 2,
+        -drawSize / 2,
+        drawSize,
+        drawSize
+      )
+    }
     ctx2d.restore()
   }
 
@@ -255,6 +264,23 @@ onMounted(() => {
       }
     }
     return { closest, closestDist }
+  }
+
+  function eatFood(f: Fish, food: Food | null) {
+    if (!food) return
+    const eatRange = f.size * 0.6
+    for (const p of food.particles) {
+      if (p.eaten) continue
+      const px = food.x + p.ox
+      const py = food.y + p.oy
+      const dist = Math.hypot(px - f.x, py - f.y)
+      if (dist < eatRange) {
+        p.eaten = true
+        if (f.size < f.maxSize) {
+          f.size = Math.min(f.maxSize, f.size + 0.35)
+        }
+      }
+    }
   }
 
   function moveToTarget(f: Fish, targetX: number, targetY: number, maxSpeed: number) {
@@ -339,22 +365,7 @@ onMounted(() => {
       f.vy += (dyMouse / (distMouse || 1)) * force * 0.8
     }
 
-    // Eat food
-    if (closest) {
-      const eatRange = f.size * 0.6
-      for (const p of closest.particles) {
-        if (p.eaten) continue
-        const px = closest.x + p.ox
-        const py = closest.y + p.oy
-        const dist = Math.hypot(px - f.x, py - f.y)
-        if (dist < eatRange) {
-          p.eaten = true
-          if (f.size < f.maxSize) {
-            f.size = Math.min(f.maxSize, f.size + 0.35)
-          }
-        }
-      }
-    }
+    eatFood(f, closest)
 
     // Sprite direction
     const angle = f.state === 'orbit' ? f.orbitAngle + Math.PI / 2 : Math.atan2(f.vy, f.vx)
@@ -422,21 +433,7 @@ onMounted(() => {
     if (f.y < -80) f.y = height + 80
     if (f.y > height + 80) f.y = -80
 
-    if (closest) {
-      const eatRange = f.size * 0.6
-      for (const p of closest.particles) {
-        if (p.eaten) continue
-        const px = closest.x + p.ox
-        const py = closest.y + p.oy
-        const dist = Math.hypot(px - f.x, py - f.y)
-        if (dist < eatRange) {
-          p.eaten = true
-          if (f.size < f.maxSize) {
-            f.size = Math.min(f.maxSize, f.size + 0.35)
-          }
-        }
-      }
-    }
+    eatFood(f, closest)
 
     const angle = Math.atan2(f.vy, f.vx)
     const targetIdx = spriteIndexForAngle(angle)
@@ -493,16 +490,36 @@ onMounted(() => {
     raf = requestAnimationFrame(animate)
   }
 
+  function onVisibilityChange() {
+    if (document.hidden) {
+      if (raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    } else if (spriteLoaded || spriteW === 0) {
+      animate()
+    }
+  }
+
   resize()
   window.addEventListener('resize', resize)
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mousedown', onMouseDown)
   window.addEventListener('mouseup', onMouseUp)
   window.addEventListener('mouseleave', onMouseLeave)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 
-  sprite.onload = () => {
+  spriteOnload = () => {
+    spriteLoaded = true
     spriteW = sprite.width / spriteCols
     spriteH = sprite.height / spriteRows
+    animate()
+  }
+  sprite.onload = spriteOnload
+
+  sprite.onerror = () => {
+    console.error('[FishPond] Failed to load sprite:', sprite.src)
+    spriteLoaded = false
     animate()
   }
 
@@ -513,6 +530,9 @@ onMounted(() => {
     window.removeEventListener('mousedown', onMouseDown)
     window.removeEventListener('mouseup', onMouseUp)
     window.removeEventListener('mouseleave', onMouseLeave)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    sprite.onload = null
+    sprite.onerror = null
   })
 })
 </script>

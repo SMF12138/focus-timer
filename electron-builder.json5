@@ -32,11 +32,4 @@
     installerHeaderIcon: 'build/icon.ico',
     include: 'build/installer.nsh',
   },
-  extraResources: [
-    {
-      from: 'dist-electron/native',
-      to: 'dist-electron/native',
-      filter: ['**/*.node'],
-    },
-  ],
 }

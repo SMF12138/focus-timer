@@ -13,6 +13,7 @@ if (!fs.existsSync(distElectron)) {
 // Rename main.js -> main.cjs
 const mainJs = path.join(distElectron, 'main.js');
 const mainCjs = path.join(distElectron, 'main.cjs');
+if (fs.existsSync(mainCjs)) fs.unlinkSync(mainCjs);
 if (fs.existsSync(mainJs)) {
   fs.renameSync(mainJs, mainCjs);
 }
@@ -20,6 +21,7 @@ if (fs.existsSync(mainJs)) {
 // Rename preload.js -> preload.cjs
 const preloadJs = path.join(distElectron, 'preload.js');
 const preloadCjs = path.join(distElectron, 'preload.cjs');
+if (fs.existsSync(preloadCjs)) fs.unlinkSync(preloadCjs);
 if (fs.existsSync(preloadJs)) {
   fs.renameSync(preloadJs, preloadCjs);
 }

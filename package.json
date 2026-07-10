@@ -1,7 +1,7 @@
 {
   "name": "focus-timer",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "一款支持系统级快捷键封锁的 Windows 全屏专注计时器。",
   "author": "专注计时器团队",
   "type": "module",

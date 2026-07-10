@@ -1,23 +1,13 @@
 <template>
   <div class="timer" :class="{ urgent: isUrgent, finished: finished }">
-    <!-- Aurora background -->
-    <div class="aurora-bg">
-      <div class="aurora aurora-1"></div>
-      <div class="aurora aurora-2"></div>
-      <div class="aurora aurora-3"></div>
-      <div class="aurora aurora-4"></div>
-    </div>
+    <AuroraBg :count="4" />
 
-    <!-- Particle canvas -->
     <canvas ref="particleCanvas" class="particle-canvas"></canvas>
-
-    <!-- Fireworks canvas -->
     <canvas v-show="finished" ref="fireworkCanvas" class="firework-canvas"></canvas>
 
-    <!-- Fish pond -->
-  <FishPond mode="orbit" />
+    <FishPond mode="orbit" />
 
-  <div class="content">
+    <div class="content">
       <div class="ring-wrapper">
         <svg class="ring" viewBox="0 0 100 100">
           <defs>
@@ -44,65 +34,89 @@
             :stroke-dashoffset="offset"
           />
         </svg>
-        <div class="time">{{ display }}</div>
+        <div class="time" aria-live="polite" aria-atomic="true">{{ display }}</div>
       </div>
     </div>
 
-    <div v-if="finished" class="finish-modal">
+    <div
+      v-if="finished"
+      class="finish-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="finish-title"
+    >
       <div class="finish-card">
         <div class="finish-icon">🎉</div>
-        <h2 class="finish-title">专注时间到</h2>
+        <h2 id="finish-title" class="finish-title">专注时间到</h2>
         <p class="finish-subtitle">休息一下吧，你已完成本次专注</p>
-        <button class="confirm-btn" @click="onConfirm">确定</button>
+        <button ref="confirmBtn" class="confirm-btn" @click="onConfirm">确定</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useTimer } from '../composables/useTimer'
+import { useParticles } from '../composables/useParticles'
+import { useFireworks } from '../composables/useFireworks'
 import FishPond from '../components/FishPond.vue'
+import AuroraBg from '../components/AuroraBg.vue'
 
-const { remaining, total, display, progress } = useTimer()
+const { remaining, display, progress, setTimer, reset } = useTimer()
+const particleCanvas = ref<HTMLCanvasElement | null>(null)
+const fireworkCanvas = ref<HTMLCanvasElement | null>(null)
+const { init: initParticles, cleanup: cleanupParticles } = useParticles(particleCanvas)
+const { start: startFireworks, stop: stopFireworks } = useFireworks(fireworkCanvas)
+
 const finished = ref(false)
+const confirmBtn = ref<HTMLButtonElement | null>(null)
 const radius = 45
 const circumference = 2 * Math.PI * radius
 
 const offset = computed(() => circumference * (1 - progress.value))
 const isUrgent = computed(() => remaining.value <= 10 && remaining.value > 0)
 
-const particleCanvas = ref<HTMLCanvasElement | null>(null)
-const fireworkCanvas = ref<HTMLCanvasElement | null>(null)
-
-let particleRaf = 0
-let fireworkRaf = 0
+let removeTimerUpdate: (() => void) | null = null
+let removeTimerFinished: (() => void) | null = null
 
 onMounted(() => {
-  window.electronAPI?.onTimerUpdate?.(({ remaining: r, total: t }) => {
-    remaining.value = r
-    total.value = t
-  })
+  removeTimerUpdate = window.electronAPI?.onTimerUpdate?.(({ remaining: r, total: t }) => {
+    setTimer(r, t)
+  }) ?? null
 
-  window.electronAPI?.onTimerFinished?.(() => {
+  removeTimerFinished = window.electronAPI?.onTimerFinished?.(() => {
     finished.value = true
     playBeep()
     startFireworks()
-  })
+  }) ?? null
 
   initParticles()
 })
 
 onUnmounted(() => {
-  cancelAnimationFrame(particleRaf)
-  cancelAnimationFrame(fireworkRaf)
+  removeTimerUpdate?.()
+  removeTimerFinished?.()
+  cleanupParticles()
+  stopFireworks()
+})
+
+watch(finished, (value) => {
+  if (value) {
+    nextTick(() => confirmBtn.value?.focus())
+  }
 })
 
 function playBeep() {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!AudioCtx) return
     const ctx = new AudioCtx()
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {
+        ctx.close().catch(() => {})
+      })
+    }
     const oscillator = ctx.createOscillator()
     const gain = ctx.createGain()
     oscillator.connect(gain)
@@ -114,182 +128,16 @@ function playBeep() {
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
     oscillator.start()
     oscillator.stop(ctx.currentTime + 0.5)
+    setTimeout(() => ctx.close().catch(() => {}), 700)
   } catch (err) {
     console.warn('Audio playback failed:', err)
   }
 }
 
-function initParticles() {
-  const canvas = particleCanvas.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  let width = 0
-  let height = 0
-  const particles: Array<{
-    x: number
-    y: number
-    vx: number
-    vy: number
-    size: number
-    alpha: number
-    color: string
-  }> = []
-
-  const colors = ['#38bdf8', '#818cf8', '#a78bfa', '#34d399', '#fbbf24']
-
-  function resize() {
-    width = canvas!.width = window.innerWidth
-    height = canvas!.height = window.innerHeight
-  }
-
-  function createParticle() {
-    return {
-      x: Math.random() * width,
-      y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5 - 0.3,
-      size: Math.random() * 2 + 1,
-      alpha: Math.random() * 0.5 + 0.2,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    }
-  }
-
-  for (let i = 0; i < 80; i++) {
-    particles.push(createParticle())
-  }
-
-  resize()
-  window.addEventListener('resize', resize)
-
-  function animate() {
-    if (!ctx) return
-    ctx.clearRect(0, 0, width, height)
-
-    for (const p of particles) {
-      p.x += p.vx
-      p.y += p.vy
-      p.alpha -= 0.002
-
-      if (p.alpha <= 0 || p.y < 0 || p.x < 0 || p.x > width) {
-        const np = createParticle()
-        p.x = np.x
-        p.y = np.y
-        p.vx = np.vx
-        p.vy = np.vy
-        p.size = np.size
-        p.alpha = np.alpha
-        p.color = np.color
-      }
-
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-      ctx.fillStyle = p.color
-      ctx.globalAlpha = p.alpha
-      ctx.fill()
-    }
-
-    ctx.globalAlpha = 1
-    particleRaf = requestAnimationFrame(animate)
-  }
-
-  animate()
-}
-
-interface FireworkParticle {
-  x: number
-  y: number
-  vx: number
-  vy: number
-  alpha: number
-  decay: number
-  color: string
-  size: number
-}
-
-let fireworks: FireworkParticle[] = []
-
-function startFireworks() {
-  const canvas = fireworkCanvas.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  let width = 0
-  let height = 0
-
-  function resize() {
-    width = canvas!.width = window.innerWidth
-    height = canvas!.height = window.innerHeight
-  }
-
-  resize()
-  window.addEventListener('resize', resize)
-
-  const colors = ['#38bdf8', '#818cf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb7185']
-
-  function explode(cx: number, cy: number) {
-    const count = 60
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5
-      const speed = Math.random() * 5 + 3
-      fireworks.push({
-        x: cx,
-        y: cy,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        alpha: 1,
-        decay: Math.random() * 0.015 + 0.01,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 2 + 1.5,
-      })
-    }
-  }
-
-  let frame = 0
-  function animate() {
-    if (!ctx) return
-    ctx.clearRect(0, 0, width, height)
-
-    if (frame % 20 === 0) {
-      explode(Math.random() * width, Math.random() * height * 0.6)
-    }
-    frame++
-
-    for (let i = fireworks.length - 1; i >= 0; i--) {
-      const p = fireworks[i]
-      p.x += p.vx
-      p.y += p.vy
-      p.vy += 0.08
-      p.vx *= 0.98
-      p.alpha -= p.decay
-
-      if (p.alpha <= 0) {
-        fireworks.splice(i, 1)
-        continue
-      }
-
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-      ctx.fillStyle = p.color
-      ctx.globalAlpha = p.alpha
-      ctx.fill()
-    }
-
-    ctx.globalAlpha = 1
-    fireworkRaf = requestAnimationFrame(animate)
-  }
-
-  animate()
-}
-
 function onConfirm() {
   finished.value = false
-  fireworks = []
-  cancelAnimationFrame(fireworkRaf)
+  stopFireworks()
+  reset()
   window.electronAPI?.finishAck?.()
 }
 </script>
@@ -303,72 +151,6 @@ function onConfirm() {
   justify-content: center;
   background: var(--bg);
   overflow: hidden;
-}
-
-.aurora-bg {
-  position: absolute;
-  inset: -50%;
-  z-index: 0;
-  pointer-events: none;
-  filter: blur(80px);
-  opacity: 0.8;
-}
-
-.aurora {
-  position: absolute;
-  border-radius: 50%;
-  animation: auroraFloat 25s ease-in-out infinite;
-}
-
-.aurora-1 {
-  width: 70vw;
-  height: 70vw;
-  top: 0;
-  left: 10%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.45), transparent 60%);
-  animation-delay: 0s;
-}
-
-.aurora-2 {
-  width: 60vw;
-  height: 60vw;
-  top: 30%;
-  right: 0;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.4), transparent 60%);
-  animation-delay: -8s;
-}
-
-.aurora-3 {
-  width: 55vw;
-  height: 55vw;
-  bottom: 0;
-  left: 25%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 60%);
-  animation-delay: -16s;
-}
-
-.aurora-4 {
-  width: 50vw;
-  height: 50vw;
-  bottom: 20%;
-  right: 15%;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.25), transparent 60%);
-  animation-delay: -5s;
-}
-
-@keyframes auroraFloat {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    transform: translate(6%, -8%) scale(1.08);
-  }
-  50% {
-    transform: translate(-5%, 5%) scale(0.95);
-  }
-  75% {
-    transform: translate(4%, 3%) scale(1.03);
-  }
 }
 
 .particle-canvas,
@@ -411,7 +193,7 @@ function onConfirm() {
   stroke: url(#gradient);
   stroke-width: 4;
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear;
+  transition: stroke-dashoffset 0.1s linear;
   filter: url(#glow);
 }
 
